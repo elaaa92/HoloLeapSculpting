@@ -5,12 +5,12 @@
 # Write a line equal to 'overwrite-all' (without quotes) to overwrite everything (preserved accross builds)
 # Write a line equal to 'keep-all' (without quotes) to keep files regardless their modification (preserved accross builds)
 # Default behavior is to never overwrite files
-HoloLeapSculpting.sln: EF027A392960653B9661F3A3FB22B81D
+HoloLeapSculpting.sln: modified
 GeneratedProjects\UWP\Assembly-CSharp\project.json: 4FCF72A4D5EDB37E24C206A7BCFE7AF1
 HoloLeapSculpting\App.cs: D0398583BF8FBD1803164C74AA4A8983
-HoloLeapSculpting\HoloLeapSculpting.csproj: 5A5CAE3A481A666EE824892ED53EFDB8
-HoloLeapSculpting\HoloLeapSculpting.csproj.user: BEFB8AC4886C4CFDD3C68445D6F19B04
-HoloLeapSculpting\Package.appxmanifest: AAC175365BB89D0A87EDB11F2C50BFCD
+HoloLeapSculpting\HoloLeapSculpting.csproj: 9F21FCAF8BF46D3F5EC94A286461793D
+HoloLeapSculpting\HoloLeapSculpting.csproj.user: modified
+HoloLeapSculpting\Package.appxmanifest: A19BEFAF37D76C5D58FA09D7EEEA8890
 HoloLeapSculpting\project.json: 1D02BC64BAC0D041019673A1C4C51737
 HoloLeapSculpting\Assets\SplashScreen.scale-200.png: 60618416282ED104FD1473935716045D
 HoloLeapSculpting\Assets\Square150x150Logo.scale-200.png: E02834B4A5DFB97FF8E212C1CACBB084
@@ -18,5 +18,13 @@ HoloLeapSculpting\Assets\Square44x44Logo.scale-200.png: 6C6EF27184ABE9D870A9D564
 HoloLeapSculpting\Assets\Square44x44Logo.targetsize-24_altform-unplated.png: 156637F7B5363E983E7A46D8E533A23D
 HoloLeapSculpting\Assets\StoreLogo.png: 90BD194CA4A7CFFF3E8B8222229857FB
 HoloLeapSculpting\Assets\Wide310x150Logo.scale-200.png: C96846A80DF667F87355569CD816192D
+HoloLeapSculpting\bin\x86\Debug\AppX\Assets\SplashScreen.scale-200.png: 60618416282ED104FD1473935716045D
+HoloLeapSculpting\bin\x86\Debug\AppX\Assets\Square150x150Logo.scale-200.png: E02834B4A5DFB97FF8E212C1CACBB084
+HoloLeapSculpting\bin\x86\Debug\AppX\Assets\Square44x44Logo.scale-200.png: 6C6EF27184ABE9D870A9D564953775DE
+HoloLeapSculpting\bin\x86\Debug\AppX\Assets\Square44x44Logo.targetsize-24_altform-unplated.png: 156637F7B5363E983E7A46D8E533A23D
+HoloLeapSculpting\bin\x86\Debug\AppX\Assets\StoreLogo.png: 90BD194CA4A7CFFF3E8B8222229857FB
+HoloLeapSculpting\bin\x86\Debug\AppX\Assets\Wide310x150Logo.scale-200.png: C96846A80DF667F87355569CD816192D
+HoloLeapSculpting\bin\x86\Debug\AppX\Properties\Default.rd.xml: 72EB282657164E79A1C42F6240984826
+HoloLeapSculpting\obj\x86\Debug\HoloLeapSculpting.csproj.CopyComplete: D41D8CD98F00B204E9800998ECF8427E
 HoloLeapSculpting\Properties\AssemblyInfo.cs: 330B6903C4130B72B140068070CF7E5D
 HoloLeapSculpting\Properties\Default.rd.xml: 72EB282657164E79A1C42F6240984826
