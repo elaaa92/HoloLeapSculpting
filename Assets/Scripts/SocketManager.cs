@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 using System.Net;
-using System.Threading;
 using System;
+using System.Collections.Generic;
 
 
 #if WINDOWS_UWP
@@ -15,17 +15,12 @@ using System.Net.Sockets;
 public class SocketManager : MonoBehaviour
 {
     public static SocketManager Instance { get; private set; }
-    // test hololens
-#if !UNITY_EDITOR
-    private const string HOST = "10.132.0.133";
-#else
+
     private const string HOST = "127.0.0.1";
-#endif
-    private const int PORTIN = 9000;
-    private const int PORTOUT = 9001;
+    private const int PORTIN = 9004;
+    private const int PORTOUT = 9005;
 
     IConcreteSocketManager manager = null;
-    private String lastInfo = "";
 
     // Use this for initialization
     void Start()
@@ -39,15 +34,13 @@ public class SocketManager : MonoBehaviour
         manager = new DotNetSocketManager();
 #endif
 
-        manager.init(HOST, PORTIN, PORTOUT);
+        manager.init(HOST, PORTIN, PORTOUT, 700);
 
-#if WINDOWS_UWP
-        InvokeRepeating("UpdateParameters", 1.0f, 1.0f);
-#else
-        manager.OnDataReceived += Manager_OnDataReceived;
+#if !WINDOWS_UWP
+        if(Application.isPlaying)
+            InvokeRepeating("ListenForAWhile", 0.1f, 0.5f);
 #endif
     }
-
 
     /// <summary>
     /// Questo metodo invia un messaggio msg al simulatore
@@ -60,52 +53,45 @@ public class SocketManager : MonoBehaviour
         manager.SendUdpDatagram(msg);
     }
 
+    public List<string> getDataBuffer()
+    {
+        return manager.getDataBuffer();
+    }
+
     public string getData()
     {
         return manager.getData();
     }
 
-    private void OnApplicationQuit()
+    public long getStartDate()
     {
-        manager.quit();
+        return manager.getStartDate();
     }
 
-    private void Manager_OnDataReceived(object sender, EventArgs e)
+#if !WINDOWS_UWP
+    public void ListenForAWhile()
     {
-        UpdateParameters();
+        manager.ReceiveData();
     }
+#endif
 
-    void UpdateParameters()
+    public void SendPacket(string msg, long timestamp)
     {
-        string data = manager.getData();
-        if (data != null && data != "")
-        {
-            lastInfo = data;
-        }
-            
-        /*if (data != null)
-        {
-            if (!InputSequence.Instance.flag)
-            {
-                Parameters.Instance.set_new_parameters(data);
-                InputSequence.Instance.checkNextSeq();
-            }
-        }*/
-    }
-
-    public String GetLastInfo()
-    {
-        return lastInfo;
+        manager.StartSendingPacket(msg, timestamp);
     }
 }
 
 interface IConcreteSocketManager
 {
-    void init(string host, int inputPort, int outputPort);
+    void init(string host, int inputPort, int outputPort, long respDelayTol);
     void SendUdpDatagram(string msg);
-    void quit();
     string getData();
-    event EventHandler OnDataReceived;
+    List<string> getDataBuffer();
+    long getStartDate();
+    void StartSendingPacket(string msg, long timestamp);
+#if !WINDOWS_UWP
+    void ReceiveData();
+#endif
 
 }
 
@@ -116,65 +102,155 @@ public class DotNetSocketManager : IConcreteSocketManager
     Socket inputSocket;
     IPEndPoint inputEndPoint;
     IPEndPoint outputEndPoint;
-    bool stop = false;
-    private string returnData;
-    Thread t;
+    private List<String> returnData;
+    private long startDate;
+    private long lastReceived;
+    private int timer;
+    private long respDelay;
+    private bool synchronized;
+    private bool packetreceived;
+    private string packet;
+    private long packettimestamp;
 
-    public event EventHandler OnDataReceived;
-
-    public string getData()
+    public List<string> getDataBuffer()
     {
         return returnData;
     }
 
-    public void init(string host, int inputPort, int outputPort)
+    void updateBuffer(string data)
     {
+        lastReceived = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        if (data.Contains("Leap start"))
+            synchronized = true;
+        else if (data.Contains("Packet received"))
+        {
+            packetreceived = true;
+            packet = null;
+            timer = 0;
+        }
+        else
+        {
+            if (returnData.Count > 10000)
+                returnData.Clear();
+            returnData.Add(data);
+        }
+        
+        if (!synchronized)
+            SendWelcomeMessage();
+
+        if (!packetreceived)
+        {
+            if(timer % 100 == 0)
+                SendPacket();
+            timer++;
+        }
+    }
+
+    //Get last message, drop too old ones
+    public string getData()
+    {
+        long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        if (now - lastReceived < respDelay)
+        {
+            int size = returnData.Count;
+            string data = null;
+            if (size > 2)
+                returnData.RemoveRange(0, size - 2);
+            if(size > 0)
+                data = returnData[0];
+            return data;
+        }
+        else
+        {
+            returnData.Clear();
+            return null;
+        }
+    }
+
+    public long getStartDate()
+    {
+        return this.startDate;
+    }
+
+    public void init(string host, int inputPort, int outputPort, long respDelayTol)
+    {
+        returnData = new List<string>();
         // input socket
         inputSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         IPAddress serverAddr = IPAddress.Parse(host);
         inputEndPoint = new IPEndPoint(serverAddr, inputPort);
-        SendUdpDatagram("Leap start");
+
+        synchronized = false;
+        SendWelcomeMessage();
 
         // output socket
         outputSocket = new UdpClient(outputPort);
         outputEndPoint = new IPEndPoint(IPAddress.Any, 0);
-        //outputEndPoint = new IPEndPoint(serverAddr, outputPort);
-        receiveData();
+        outputSocket.Client.ReceiveTimeout = 100;
+        respDelay = respDelayTol;
+        timer = 0;
     }
 
-    public void quit()
+    private void SendWelcomeMessage()
     {
-        stop = true;
-        if (t != null)
-        {
-            t.Abort();
-        }
+        SendUdpDatagram("Leap start");
+        this.startDate = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     }
 
     public void SendUdpDatagram(string msg)
     {
-        byte[] byteMsg = System.Text.Encoding.ASCII.GetBytes(msg);
-        inputSocket.SendTo(byteMsg, inputEndPoint);
-    }
-
-    private void receiveData()
-    {
-
-        t = new Thread(() =>
+        int bytelength = System.Text.ASCIIEncoding.ASCII.GetByteCount(msg);
+        //Each block must contain max 128 bytes
+        if (bytelength < 128)
         {
-            while (!stop)
+            byte[] byteMsg = System.Text.Encoding.ASCII.GetBytes(msg);
+            inputSocket.SendTo(byteMsg, inputEndPoint);
+        }
+        else
+        {
+            string times = packettimestamp.ToString();
+            int timestamplength = times.Length, strlength = msg.Length, chunksize = 127, nblocks = Mathf.CeilToInt(strlength / (float)chunksize);
+            int indexlength = nblocks.ToString().Length, payloadsize;
+
+            nblocks = Mathf.CeilToInt((strlength + (2 * indexlength + timestamplength + 4) * nblocks) / (float)chunksize);
+            payloadsize = strlength / nblocks;
+
+            for (int i = 0; i < nblocks; i++)
             {
-                byte[] buff = outputSocket.Receive(ref outputEndPoint);
-                returnData = System.Text.Encoding.ASCII.GetString(buff, 0, buff.Length);
-                if (this.OnDataReceived != null)
-                {
-                    this.OnDataReceived(this, new EventArgs());
-                }
+                string block = "t" + times + " " + i + " " + nblocks + " " + msg.Substring(i * payloadsize, (i * payloadsize + payloadsize <= strlength) ? payloadsize : strlength - i * payloadsize);
+                block.PadRight(128, '_');
+                byte[] byteMsg = System.Text.Encoding.ASCII.GetBytes(block);
+                inputSocket.SendTo(byteMsg, inputEndPoint);
+                Debug.Log("sent: " + block.Length + " " + block);
             }
-        });
-        t.Start();
+        }
+
     }
 
+    public void StartSendingPacket(string msg, long timestamp)
+    {
+        packet = msg;
+        packetreceived = false;
+        timer = 0;
+        packettimestamp = timestamp;
+    }
+
+    private void SendPacket()
+    {
+        SendUdpDatagram(packet);
+    }
+
+    public void ReceiveData()
+    {
+        try
+        {
+            byte[] buff = outputSocket.Receive(ref outputEndPoint);
+            updateBuffer(System.Text.Encoding.ASCII.GetString(buff, 0, buff.Length));
+        }
+        catch
+        {
+        }
+    }
 }
 #endif
 
@@ -184,38 +260,109 @@ public class UWPSocketManager : IConcreteSocketManager
     DatagramSocket outputSocket;
     DatagramSocket inputSocket;
     StreamWriter inputWriter;
-    private string returnData;
+    private List<string> returnData;
+    private long startDate;
+    private long lastReceived;
+    private int timer;
+    private long respDelay;
+    private bool synchronized;
+    private bool packetreceived;
+    private string packet;
+    private long packettimestamp;
 
     public event EventHandler OnDataReceived;
 
+    public List<string> getDataBuffer()
+    {
+        List<string> buffer = returnData.GetRange(0, returnData.Count);
+        returnData.Clear();
+        return buffer;
+    }
+
+    void updateBuffer(string data)
+    {
+        lastReceived = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        if (data.Contains("Leap start"))
+        {
+            synchronized = true;
+        }
+        else if (data.Contains("Packet received"))
+        {
+            packetreceived = true;
+            packet = null;
+            timer = 0;
+        }
+        else
+        {
+            if (returnData.Count > 10000)
+                returnData.Clear();
+            returnData.Add(data);
+        }
+        
+        if (!synchronized)
+            SendWelcomeMessage();
+
+        if (!packetreceived)
+        {
+            if (timer % 100 == 0)
+                SendPacket();
+            timer++;
+        }
+    }
+
     public string getData()
     {
-        return returnData;
+        long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        if (now - lastReceived < respDelay)
+        {
+            int size = returnData.Count;
+            string data = null;
+            if (size > 2)
+                returnData.RemoveRange(0, size - 2);
+            if (size > 0)
+                data = returnData[0];
+            return data;
+        }
+        else
+        {
+            returnData.Clear();
+            return null;
+        }
     }
 
-    public void init(string host, int inputPort, int outputPort)
+    public long getStartDate()
     {
-        this.initSockets(host, inputPort, outputPort);
+        return this.startDate;
     }
 
-    private async void initSockets(string host, int inputPort, int outputPort)
+    public void init(string host, int inputPort, int outputPort, long respDelayTol)
+    {
+        returnData = new List<string>();
+        this.initSockets(host, inputPort, outputPort, respDelayTol);
+    }
+
+    private async void initSockets(string host, int inputPort, int outputPort, long respDelayTol)
     {
         // input socket
         inputSocket = new DatagramSocket();
         Windows.Networking.HostName serverAddr = new Windows.Networking.HostName(host);
         Stream streamOut = (await inputSocket.GetOutputStreamAsync(serverAddr, "" + inputPort)).AsStreamForWrite();
-        inputWriter = new StreamWriter(streamOut);
-        Debug.Log("Sending starting message to " + serverAddr + ":" + inputPort);
-        SendUdpDatagram("Leap start");
+        inputWriter = new StreamWriter(streamOut, System.Text.Encoding.ASCII, 128);
+
+        synchronized = false;
+        SendWelcomeMessage();
 
         // output socket
         outputSocket = new DatagramSocket();
         outputSocket.MessageReceived += Socket_MessageReceived;
+        respDelay = respDelayTol;
+        packetreceived = true;
+        timer = 0;
 
         try
         {
             await outputSocket.BindServiceNameAsync("" + outputPort);
-            Debug.Log("Starting listening on port " + outputSocket.Information.LocalPort);
+            //Debug.Log("Starting listening on port " + outputSocket.Information.LocalPort);
         }
         catch (Exception e)
         {
@@ -223,6 +370,13 @@ public class UWPSocketManager : IConcreteSocketManager
             Debug.Log(Windows.Networking.Sockets.SocketError.GetStatus(e.HResult).ToString());
             return;
         }
+    }
+
+    private void SendWelcomeMessage()
+    {
+        SendUdpDatagram("Leap start");
+        Debug.Log("Sent leap start");
+        this.startDate = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     }
 
     public void quit()
@@ -234,15 +388,50 @@ public class UWPSocketManager : IConcreteSocketManager
     {
         try
         {
-            await inputWriter.WriteAsync(msg);
-            await inputWriter.FlushAsync();
+            int bytelength = System.Text.ASCIIEncoding.ASCII.GetByteCount(msg);
+            //Each block must contain max 128 bytes
+            if (bytelength < 128)
+            {
+                await inputWriter.WriteAsync(msg);
+                await inputWriter.FlushAsync();
+            }
+            else
+            {
+                string times = packettimestamp.ToString();
+                int timestamplength = times.Length, strlength = msg.Length, chunksize = 127, nblocks = Mathf.CeilToInt(strlength / (float)chunksize);
+                int indexlength = nblocks.ToString().Length, payloadsize, headersize = 2 * indexlength + timestamplength + 4, extendedmessagelength;
+
+                extendedmessagelength = strlength + headersize * nblocks;
+                nblocks = Mathf.CeilToInt(extendedmessagelength / (float)chunksize);
+                payloadsize = Mathf.CeilToInt(strlength / (float) nblocks);
+                
+                for (int i = 0; i < nblocks; i++)
+                {
+                    string block = "t" + times + " " + i + " " + nblocks + " " + msg.Substring(i * payloadsize, (i * payloadsize + payloadsize <= strlength) ? payloadsize : strlength - i * payloadsize);
+                    block.PadRight(128, '_');
+                    await inputWriter.WriteAsync(block);
+                    await inputWriter.FlushAsync();
+                    //Debug.Log("sent: " + block.Length + " " + block);
+                }
+            }
         }
         catch (Exception e)
         {
-            Debug.Log(e.ToString());
-            Debug.Log(Windows.Networking.Sockets.SocketError.GetStatus(e.HResult).ToString());
-            return;
+            Debug.Log(e.Message);
         }
+    }
+
+    public void StartSendingPacket(string msg, long timestamp)
+    {
+        packet = msg;
+        packetreceived = false;
+        timer = 0;
+        packettimestamp = timestamp;
+    }
+
+    private void SendPacket()
+    {
+        SendUdpDatagram(packet);
     }
 
     private async void Socket_MessageReceived(Windows.Networking.Sockets.DatagramSocket sender,
@@ -254,7 +443,7 @@ public class UWPSocketManager : IConcreteSocketManager
         {
             Stream streamIn = args.GetDataStream().AsStreamForRead();
             StreamReader reader = new StreamReader(streamIn);
-            returnData = await reader.ReadLineAsync();
+            updateBuffer(await reader.ReadLineAsync());
         }
         catch (Exception e)
         {

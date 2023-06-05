@@ -30,7 +30,7 @@ namespace HoloToolkit.Unity.InputModule
         public int OpaqueQualityLevel;
 
         [Tooltip("The near clipping plane distance for a transparent display.")]
-        public float NearClipPlane_TransparentDisplay = 0.85f;
+        public float NearClipPlane_TransparentDisplay = 0.1f;
 
         [Tooltip("Values for Camera.clearFlags, determining what to clear when rendering a Camera for an opaque display.")]
         public CameraClearFlags CameraClearFlags_TransparentDisplay = CameraClearFlags.SolidColor;

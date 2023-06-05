@@ -2464,7 +2464,7 @@ GameObject:
   - component: {fileID: 11499414}
   - component: {fileID: 11401954}
   - component: {fileID: 114593871428788132}
-  - component: {fileID: 114750739872859274}
+  - component: {fileID: 114797044790836674}
   m_Layer: 0
   m_Name: Keyboard
   m_TagString: Untagged
@@ -26602,7 +26602,7 @@ MonoBehaviour:
   m_FillAmount: 1
   m_FillClockwise: 1
   m_FillOrigin: 0
---- !u!114 &114750739872859274
+--- !u!114 &114797044790836674
 MonoBehaviour:
   m_ObjectHideFlags: 1
   m_PrefabParentObject: {fileID: 0}
